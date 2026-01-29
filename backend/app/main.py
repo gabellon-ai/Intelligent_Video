@@ -11,22 +11,33 @@ import uuid
 import os
 
 from .config import settings
-from .routers import videos, streams, analysis
+from .routers import videos, streams, analysis, exports, alerts, rtsp
 from .services.detector import DetectorService
+from .services.stream_service import init_stream_service, get_stream_service
 
 # Global detector instance (loaded once at startup)
 detector: DetectorService = None
+stream_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load ML model at startup, cleanup on shutdown"""
-    global detector
+    global detector, stream_service
     print("🚀 Loading detection model...")
     detector = DetectorService()
     await detector.load_model()
     print("✅ Model loaded, ready for inference")
+    
+    # Initialize stream service with detector
+    stream_service = init_stream_service(detector)
+    print("📹 Stream service initialized")
+    
     yield
+    
+    # Cleanup streams on shutdown
+    if stream_service:
+        await stream_service.shutdown()
     print("👋 Shutting down...")
 
 
@@ -49,7 +60,10 @@ app.add_middleware(
 # Routers
 app.include_router(videos.router, prefix="/api/videos", tags=["videos"])
 app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
+app.include_router(rtsp.router, prefix="/api/rtsp", tags=["rtsp"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(exports.router, prefix="/api/videos", tags=["exports"])
+app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
 
 # Serve uploaded files
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -60,10 +74,12 @@ app.mount("/output", StaticFiles(directory=settings.OUTPUT_DIR), name="output")
 
 @app.get("/api/health")
 async def health_check():
+    active_streams = len(stream_service.list_streams()) if stream_service else 0
     return {
         "status": "healthy",
         "model_loaded": detector is not None and detector.is_loaded,
-        "gpu_available": detector.gpu_available if detector else False
+        "gpu_available": detector.gpu_available if detector else False,
+        "active_streams": active_streams
     }
 
 

@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Play, Pause, SkipBack, SkipForward, Download } from 'lucide-react'
+import { Play, SkipBack, SkipForward } from 'lucide-react'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { DetectionSummary } from '../components/DetectionSummary'
 import { Timeline } from '../components/Timeline'
+import { ExportDropdown } from '../components/ExportDropdown'
 
 const API_BASE = 'http://localhost:8000/api'
 const WS_BASE = 'ws://localhost:8000/api/streams'
@@ -101,12 +102,10 @@ export function AnalysisPage() {
           <h1 className="text-2xl font-bold">Video Analysis</h1>
           <p className="text-gray-400">Job ID: {jobId}</p>
         </div>
-        {status === 'completed' && (
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition">
-            <Download className="w-4 h-4" />
-            Export Report
-          </button>
-        )}
+        <ExportDropdown 
+          jobId={jobId!} 
+          disabled={status !== 'completed'} 
+        />
       </div>
 
       {/* Progress Bar */}
