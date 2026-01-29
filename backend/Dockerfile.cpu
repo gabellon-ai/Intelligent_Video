@@ -1,0 +1,38 @@
+# CPU-only backend Dockerfile (no TensorRT)
+# For environments without NVIDIA GPU
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY app/ ./app/
+
+# Create directories
+RUN mkdir -p uploads output models/optimized
+
+# Environment variables (disable optimization for CPU)
+ENV IV_ENABLE_OPTIMIZATION=false
+ENV IV_OPTIMIZATION_BACKEND=eager
+
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

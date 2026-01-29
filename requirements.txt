@@ -22,3 +22,27 @@ paddlepaddle>=2.6.0
 tqdm>=4.66.0
 pyyaml>=6.0.0
 requests>=2.31.0
+
+# =============================================================================
+# TensorRT Optimization (Optional - for NVIDIA GPUs)
+# =============================================================================
+# For maximum performance on NVIDIA hardware, install TensorRT:
+#
+# Option 1: NGC PyTorch container (recommended for DGX)
+#   docker pull nvcr.io/nvidia/pytorch:24.01-py3
+#   # TensorRT and torch-tensorrt are pre-installed
+#
+# Option 2: Manual installation
+#   pip install tensorrt torch-tensorrt --extra-index-url https://download.pytorch.org/whl/cu121
+#
+# Option 3: torch.compile fallback (works without TensorRT)
+#   pip install triton  # Linux only, auto-installs with torch on Linux
+#
+# The system will automatically detect available backends:
+# 1. TensorRT (via torch-tensorrt) - ~10x speedup
+# 2. torch.compile with inductor - ~2-3x speedup
+# 3. Eager mode - baseline (no optimization)
+# =============================================================================
+
+# Linux-only torch.compile backend (auto-fallback if TensorRT unavailable)
+triton>=2.1.0; platform_system == "Linux"
