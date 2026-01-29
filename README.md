@@ -1,28 +1,111 @@
-# Warehouse Vision System
+# Intelligent Video - Warehouse Vision System
 
-Real-time industrial engineering study using foundation vision models.
+[![CI](https://github.com/gabellon-ai/Intelligent_Video/actions/workflows/ci.yml/badge.svg)](https://github.com/gabellon-ai/Intelligent_Video/actions/workflows/ci.yml)
+
+Real-time industrial object detection using zero-shot foundation vision models. Designed for warehouse and logistics environments.
+
+## Features
+
+- **Zero-shot detection** — No training required, just describe what to find
+- **Warehouse-optimized** — Pre-configured for forklifts, AGVs, pallets, people, boxes
+- **GPU accelerated** — CUDA support for real-time inference
+- **Extensible** — Easy to add new detection targets
 
 ## Detection Targets
-- AGVs with ID recognition (Dematic fleet)
-- Pallets (count, location)
-- People (safety zone violations)
-- Dock door state
-- Conveyor status (future)
+
+| Object | Use Case |
+|--------|----------|
+| Forklifts | Traffic monitoring, safety zones |
+| AGVs | Fleet tracking, ID recognition |
+| Pallets | Inventory counting, location tracking |
+| People | Safety compliance, zone violations |
+| Boxes | Package detection, conveyor monitoring |
+| Conveyors | Operational status (future) |
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.10+
+- CUDA-capable GPU (recommended) or CPU
+
+### Installation
+
+```bash
+git clone https://github.com/gabellon-ai/Intelligent_Video.git
+cd Intelligent_Video
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Usage
+
+```bash
+# Run detection on an image
+python src/detect_demo.py path/to/warehouse_image.jpg
+```
+
+Output is saved to `output/detected_<filename>.jpg` with bounding boxes and confidence scores.
+
+### Custom Detection Targets
+
+Edit the `queries` list in `detect_demo.py`:
+
+```python
+queries = [
+    "forklift",
+    "pallet", 
+    "person wearing safety vest",
+    "cardboard box",
+    "your custom object here"
+]
+```
 
 ## Tech Stack
-- **Detection**: Grounding DINO 1.5
-- **Segmentation**: SAM 2
-- **OCR**: Florence-2 / PaddleOCR
-- **VLM**: Qwen2-VL for scene reasoning
-- **Inference**: TensorRT optimization
-- **Hardware**: DGX Spark (GB10)
 
-## Structure
+| Component | Technology |
+|-----------|------------|
+| Detection | OWLv2 (Google) |
+| Framework | PyTorch + Transformers |
+| Inference | CUDA / CPU |
+
+### Roadmap
+
+- [ ] Grounding DINO 1.5 integration
+- [ ] SAM 2 segmentation
+- [ ] Florence-2 / PaddleOCR for text recognition
+- [ ] Qwen2-VL for scene reasoning
+- [ ] TensorRT optimization
+- [ ] Real-time video streaming
+
+## Project Structure
+
 ```
-warehouse-vision/
-├── models/          # Downloaded model weights
-├── src/             # Source code
-├── output/          # Detection results
-├── configs/         # Detection configs
+Intelligent_Video/
+├── .github/workflows/  # CI pipeline
+├── configs/            # Detection configurations
+├── models/             # Downloaded model weights (gitignored)
+├── output/             # Detection results (gitignored)
+├── src/
+│   └── detect_demo.py  # Main detection script
+├── requirements.txt
 └── README.md
 ```
+
+## Hardware
+
+Developed on NVIDIA DGX Spark (GB10). Works on any CUDA GPU or CPU (slower).
+
+## License
+
+MIT
+
+## Author
+
+Blueshift Ops
