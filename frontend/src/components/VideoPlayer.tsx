@@ -20,104 +20,122 @@ interface VideoPlayerProps {
 }
 
 const COLORS: Record<string, string> = {
-  'forklift': '#FF6B6B',
-  'person': '#4ECDC4',
-  'pallet': '#FFE66D',
-  'cardboard box': '#95E1D3',
+  'forklift': '#E07B00',
+  'person': '#0084D5',
+  'pallet': '#10B981',
+  'cardboard box': '#6B46C1',
   'AGV automated guided vehicle': '#A78BFA',
-  'conveyor belt': '#F9A826',
+  'conveyor belt': '#F59E0B',
 }
 
-export function VideoPlayer({ jobId, currentDetection, videoInfo }: VideoPlayerProps) {
+export function VideoPlayer({ currentDetection, videoInfo }: VideoPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     if (!currentDetection || !canvasRef.current) return
-
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw bounding boxes
     currentDetection.detections.forEach((det) => {
       const [x1, y1, x2, y2] = det.bbox
-      const color = COLORS[det.class] || '#FFFFFF'
-      
-      // Scale coordinates to canvas size
+      const color = COLORS[det.class] || '#0084D5'
       const scaleX = canvas.width / (videoInfo?.width || 1920)
       const scaleY = canvas.height / (videoInfo?.height || 1080)
-      
-      const sx1 = x1 * scaleX
-      const sy1 = y1 * scaleY
-      const sx2 = x2 * scaleX
-      const sy2 = y2 * scaleY
-      
-      // Draw box
+      const sx1 = x1 * scaleX, sy1 = y1 * scaleY
+      const sx2 = x2 * scaleX, sy2 = y2 * scaleY
+
       ctx.strokeStyle = color
       ctx.lineWidth = 2
       ctx.strokeRect(sx1, sy1, sx2 - sx1, sy2 - sy1)
-      
-      // Draw label background
+
       const label = `${det.class} ${(det.confidence * 100).toFixed(0)}%`
-      ctx.font = '12px Inter, sans-serif'
+      ctx.font = '600 10px Arial'
       const textWidth = ctx.measureText(label).width
-      
       ctx.fillStyle = color
-      ctx.fillRect(sx1, sy1 - 20, textWidth + 8, 20)
-      
-      // Draw label text
-      ctx.fillStyle = '#000000'
+      ctx.fillRect(sx1 - 1, sy1 - 20, textWidth + 10, 20)
+      ctx.fillStyle = '#fff'
       ctx.fillText(label, sx1 + 4, sy1 - 6)
     })
   }, [currentDetection, videoInfo])
 
   return (
-    <div className="relative aspect-video bg-gray-900">
-      {/* Placeholder for video - in production, this would be actual video */}
-      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-        {videoInfo ? (
-          <div className="text-center">
-            <p className="text-lg font-medium">Video Preview</p>
-            <p className="text-sm">{videoInfo.width}x{videoInfo.height} • {videoInfo.fps?.toFixed(1)} FPS</p>
-            <p className="text-sm">{videoInfo.duration?.toFixed(1)}s duration</p>
+    <div style={{
+      position: 'relative', aspectRatio: '16/9', background: 'var(--kv-n-900)',
+      backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 24px, rgba(255,255,255,0.07) 24px 48px)',
+      overflow: 'hidden',
+    }}>
+      {/* Placeholder */}
+      {!currentDetection && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.55)',
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 14,
+            letterSpacing: '0.08em', color: 'rgba(255,255,255,0.8)',
+          }}>WAREHOUSE FLOOR · VIDEO SOURCE</div>
+          <div className="mono" style={{ fontSize: 10, marginTop: 6, letterSpacing: '0.06em' }}>
+            {videoInfo
+              ? `${videoInfo.width}×${videoInfo.height} · ${videoInfo.fps?.toFixed(1)} FPS · ${videoInfo.duration?.toFixed(1)}s`
+              : 'Connecting…'}
           </div>
-        ) : (
-          <p>Connecting...</p>
-        )}
-      </div>
-      
-      {/* Detection overlay canvas */}
-      <canvas
-        ref={canvasRef}
-        width={960}
-        height={540}
-        className="absolute inset-0 w-full h-full pointer-events-none"
+        </div>
+      )}
+
+      {/* Canvas overlay */}
+      <canvas ref={canvasRef} width={960} height={540}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       />
 
-      {/* Current detection count overlay */}
+      {/* Counts overlay */}
       {currentDetection && Object.keys(currentDetection.counts).length > 0 && (
-        <div className="absolute top-4 left-4 bg-black/70 rounded-lg p-3">
-          <div className="space-y-1">
-            {Object.entries(currentDetection.counts).map(([cls, count]) => (
-              <div key={cls} className="flex items-center gap-2 text-sm">
-                <span 
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: COLORS[cls] || '#FFFFFF' }}
-                />
-                <span className="text-gray-300">{cls}:</span>
-                <span className="font-medium">{count}</span>
-              </div>
-            ))}
-          </div>
+        <div style={{
+          position: 'absolute', top: 12, left: 12,
+          background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 4, padding: '8px 10px',
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          {Object.entries(currentDetection.counts).map(([cls, count]) => (
+            <div key={cls} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff',
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: 2,
+                background: COLORS[cls] || '#0084D5',
+              }} />
+              <span style={{ color: 'rgba(255,255,255,0.7)' }}>{cls}</span>
+              <span style={{ fontWeight: 700 }}>{count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Analyzed badge */}
+      {currentDetection && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)',
+          padding: '4px 10px', borderRadius: 4,
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: '#86efac',
+          letterSpacing: '0.12em', fontWeight: 600,
+        }}>
+          ● ANALYZED
         </div>
       )}
 
       {/* Timestamp */}
       {currentDetection && (
-        <div className="absolute bottom-4 right-4 bg-black/70 rounded px-2 py-1 text-sm font-mono">
+        <div style={{
+          position: 'absolute', bottom: 12, right: 12,
+          background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 4, padding: '4px 8px',
+          fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff', letterSpacing: '0.04em',
+        }}>
           {currentDetection.timestamp.toFixed(2)}s
         </div>
       )}

@@ -11,7 +11,6 @@ import asyncio
 from ..services.detector import DetectorService
 from ..services.video_processor import VideoProcessor
 from ..config import settings
-from ..main import get_detector
 
 router = APIRouter()
 
@@ -61,6 +60,7 @@ async def analysis_websocket(websocket: WebSocket, job_id: str):
             return
         
         job = jobs[job_id]
+        from ..main import get_detector
         detector = get_detector()
         processor = VideoProcessor()
         

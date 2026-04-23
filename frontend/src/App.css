@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+/* KV Design System Utilities */
+.kv-dot { font-family: var(--font-serif); color: var(--kv-blue); }
+.kv-display { font-family: var(--font-display); font-weight: 900; letter-spacing: -0.01em; }
+.kv-eyebrow {
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; font-weight: 700; color: var(--kv-blue);
 }
+.mono { font-family: var(--font-mono); }
 
-::-webkit-scrollbar-track {
-  background: #1f2937;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--kv-n-100); }
+::-webkit-scrollbar-thumb { background: var(--kv-n-300); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--kv-n-400); }
 
-::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 4px;
+/* Pulse animation for live dot */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
-}
+.dot-live { animation: pulse 2s infinite; }
