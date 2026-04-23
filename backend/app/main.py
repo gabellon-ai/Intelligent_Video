@@ -18,11 +18,14 @@ from .routers import videos, streams, analysis, counting, exports, alerts, rtsp
 from .services.detector import DetectorService
 from .services.stream_service import init_stream_service, get_stream_service
 
-# Configure logging
+# Configure logging (force=True overrides any handlers installed by
+# transformers / torch during import, which otherwise silence our INFO logs).
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    force=True,
 )
+logging.getLogger("app").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global detector instance (loaded once at startup)

@@ -28,8 +28,27 @@ const COLORS: Record<string, string> = {
   'conveyor belt': '#F59E0B',
 }
 
-export function VideoPlayer({ currentDetection, videoInfo }: VideoPlayerProps) {
+export function VideoPlayer({ jobId, currentDetection, videoInfo }: VideoPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const lastSeekAt = useRef(0)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !currentDetection) return
+    // Throttle seeks to ~2/s — scrubbing on every detection (5/s) floods
+    // Range requests and makes the video appear to never finish loading.
+    const now = performance.now()
+    if (now - lastSeekAt.current < 500) return
+    const target = currentDetection.timestamp
+    if (Math.abs(video.currentTime - target) > 0.5) {
+      try {
+        if (typeof (video as any).fastSeek === 'function') (video as any).fastSeek(target)
+        else video.currentTime = target
+        lastSeekAt.current = now
+      } catch { /* seek before metadata loaded */ }
+    }
+  }, [currentDetection])
 
   useEffect(() => {
     if (!currentDetection || !canvasRef.current) return
@@ -84,6 +103,17 @@ export function VideoPlayer({ currentDetection, videoInfo }: VideoPlayerProps) {
           </div>
         </div>
       )}
+
+      {/* Video source (seeks to the current analyzed frame) */}
+      <video
+        ref={videoRef}
+        src={jobId ? `/api/videos/${jobId}/video` : undefined}
+        muted
+        playsInline
+        preload="metadata"
+        crossOrigin="anonymous"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+      />
 
       {/* Canvas overlay */}
       <canvas ref={canvasRef} width={960} height={540}

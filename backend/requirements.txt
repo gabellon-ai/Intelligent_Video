@@ -7,14 +7,21 @@ pydantic>=2.5.0
 pydantic-settings>=2.1.0
 websockets>=12.0
 
-# ML/Vision
+# ML/Vision — transformers<5 keeps numpy<2 so NGC's prebuilt torchvision /
+# cv2 / PIL native extensions (compiled against numpy 1.x) keep working.
 torch>=2.1.0
-transformers>=4.36.0
+transformers>=4.36.0,<5
 Pillow>=10.0.0
 opencv-python-headless>=4.8.0
 
-# Video processing
-numpy>=1.24.0
+# Video processing — NGC ships numpy 1.26; pinning <2 avoids ABI break.
+numpy>=1.24.0,<2
+
+# PDF export
+reportlab>=4.0.0
+
+# OCR for reading text/numbers on objects
+easyocr>=1.7.0
 
 # TensorRT optimization (optional - install if NVIDIA GPU available)
 # These packages require CUDA and TensorRT runtime to be installed
@@ -22,5 +29,5 @@ numpy>=1.24.0
 # torch-tensorrt>=2.1.0
 # tensorrt>=8.6.0
 
-# Alternative: torch.compile uses triton on Linux
-triton>=2.1.0; platform_system == "Linux"
+# triton is pre-installed and version-locked in the NGC PyTorch base image.
+# Installing from PyPI breaks the torch/triton pairing, so it is omitted here.

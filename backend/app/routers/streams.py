@@ -7,11 +7,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 import json
 import asyncio
+import logging
 
 from ..services.detector import DetectorService
 from ..services.video_processor import VideoProcessor
 from ..config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -50,92 +52,92 @@ async def analysis_websocket(websocket: WebSocket, job_id: str):
     - {"type": "error", "message": "..."}
     """
     await manager.connect(websocket, job_id)
-    
+    logger.info(f"[ws:{job_id}] connected")
+
     try:
-        # Import here to avoid circular imports
         from .videos import jobs
-        
+
         if job_id not in jobs:
+            logger.warning(f"[ws:{job_id}] job not found")
             await websocket.send_json({"type": "error", "message": "Job not found"})
             return
-        
+
         job = jobs[job_id]
         from ..main import get_detector
         detector = get_detector()
         processor = VideoProcessor()
-        
-        # Get video info
+
+        logger.info(f"[ws:{job_id}] probing video {job.filepath}")
         video_info = await processor.get_video_info(job.filepath)
         estimated_frames = int(video_info["duration"] * settings.SAMPLE_FPS)
         job.total_frames = estimated_frames
-        
+        logger.info(f"[ws:{job_id}] video_info={video_info} estimated_frames={estimated_frames}")
+
         await websocket.send_json({
             "type": "start",
             "video_info": video_info,
-            "estimated_frames": estimated_frames
+            "estimated_frames": estimated_frames,
         })
-        
-        # Process video in batches
+        logger.info(f"[ws:{job_id}] sent 'start'")
+
         job.status = "processing"
         all_detections = []
         frame_count = 0
-        
+        batch_idx = 0
+
         async for batch in processor.extract_frames_batch(job.filepath):
-            # Extract images from batch
+            batch_idx += 1
             frame_nums = [b[0] for b in batch]
             timestamps = [b[1] for b in batch]
             images = [b[2] for b in batch]
-            
-            # Run batch detection
+            logger.info(f"[ws:{job_id}] batch#{batch_idx} size={len(images)} running detect_batch")
+
             results = await detector.detect_batch(images)
-            
-            # Send results for each frame
+            logger.info(f"[ws:{job_id}] batch#{batch_idx} detection done, sending frames")
+
             for i, (frame_num, timestamp, result) in enumerate(zip(frame_nums, timestamps, results)):
                 frame_count += 1
-                
                 detection_data = {
                     "frame": frame_num,
                     "timestamp": timestamp,
                     "detections": result["detections"],
-                    "counts": result["counts"]
+                    "counts": result["counts"],
                 }
                 all_detections.append(detection_data)
-                
-                await websocket.send_json({
-                    "type": "detection",
-                    **detection_data
-                })
-                
-                # Progress update
+
+                await websocket.send_json({"type": "detection", **detection_data})
+
                 if frame_count % 5 == 0:
                     await websocket.send_json({
                         "type": "progress",
                         "frame": frame_count,
                         "total": estimated_frames,
-                        "percent": min(99, int(frame_count / estimated_frames * 100))
+                        "percent": min(99, int(frame_count / estimated_frames * 100)),
                     })
-        
-        # Generate summary
+
+        logger.info(f"[ws:{job_id}] loop complete, {frame_count} frames processed")
         summary = generate_summary(all_detections)
         job.summary = summary
         job.timeline = all_detections
         job.frames_processed = frame_count
         job.status = "completed"
         job.progress = 100
-        
-        await websocket.send_json({
-            "type": "summary",
-            **summary
-        })
-        
+
+        await websocket.send_json({"type": "summary", **summary})
         await websocket.send_json({"type": "complete"})
-        
+        logger.info(f"[ws:{job_id}] done")
+
     except WebSocketDisconnect:
-        manager.disconnect(job_id)
+        logger.warning(f"[ws:{job_id}] WebSocketDisconnect raised")
     except Exception as e:
-        await websocket.send_json({"type": "error", "message": str(e)})
+        logger.exception(f"[ws:{job_id}] handler crashed: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
     finally:
         manager.disconnect(job_id)
+        logger.info(f"[ws:{job_id}] cleaned up")
 
 
 def generate_summary(detections: list) -> dict:

@@ -1,5 +1,5 @@
 """
-Detection service - OWLv2 zero-shot object detection
+Detection service - OWLv2 zero-shot object detection with OCR
 Optimized with TensorRT/torch.compile for high-performance inference
 """
 
@@ -11,11 +11,25 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import time
+import numpy as np
 
 from ..config import settings
 from .model_optimizer import ModelOptimizer, OptimizationResult, get_sample_inputs
 
 logger = logging.getLogger(__name__)
+
+# OCR reader (lazy loaded)
+_ocr_reader = None
+
+def get_ocr_reader():
+    """Lazy load EasyOCR reader"""
+    global _ocr_reader
+    if _ocr_reader is None:
+        import easyocr
+        logger.info("Loading EasyOCR reader...")
+        _ocr_reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
+        logger.info("EasyOCR reader loaded")
+    return _ocr_reader
 
 
 class DetectorService:
@@ -218,43 +232,88 @@ class DetectorService:
                 inference_time = start_event.elapsed_time(end_event) / 1000  # Convert to seconds
                 logger.debug(f"Batch inference time: {inference_time:.4f}s for {len(images)} images")
         
-        # Post-process each image
+        # Post-process all images at once
+        target_sizes = torch.tensor([[img.size[1], img.size[0]] for img in images])
+        if self.device == "cuda":
+            target_sizes = target_sizes.to(self.device)
+
+        # Use text_labels parameter for newer transformers API
+        processed_results = self.processor.post_process_grounded_object_detection(
+            outputs,
+            threshold=threshold,
+            target_sizes=target_sizes,
+            text_labels=[queries] * len(images)
+        )
+
         results = []
-        for i, image in enumerate(images):
-            target_sizes = torch.tensor([[image.size[1], image.size[0]]])
-            if self.device == "cuda":
-                target_sizes = target_sizes.to(self.device)
-            
-            # Get outputs for this image
-            image_outputs = {
-                k: v[i:i+1] for k, v in outputs.items()
-            }
-            
-            processed = self.processor.post_process_grounded_object_detection(
-                image_outputs,
-                threshold=threshold,
-                target_sizes=target_sizes,
-                text=[queries]
-            )[0]
-            
+        for i, processed in enumerate(processed_results):
+            image = images[i]
             detections = []
             boxes = processed["boxes"].cpu().numpy()
             scores = processed["scores"].cpu().numpy()
             labels = processed["labels"].cpu().numpy()
-            
+
             for box, score, label in zip(boxes, scores, labels):
-                detections.append({
-                    "class": queries[label],
+                class_name = queries[label]
+                detection = {
+                    "class": class_name,
                     "confidence": float(score),
                     "bbox": [float(x) for x in box]
-                })
-            
+                }
+
+                # Run OCR on AGV detections to read the ID number
+                if "agv" in class_name.lower() or "autonomous" in class_name.lower():
+                    ocr_text = self._run_ocr_on_region(image, box)
+                    if ocr_text:
+                        detection["ocr_text"] = ocr_text
+                        detection["class"] = f"{class_name} #{ocr_text}"
+
+                detections.append(detection)
+
             results.append({
                 "detections": detections,
                 "counts": self._count_objects(detections)
             })
-        
+
         return results
+
+    def _run_ocr_on_region(self, image: Image.Image, bbox: np.ndarray) -> Optional[str]:
+        """Run OCR on a cropped region of the image"""
+        try:
+            x1, y1, x2, y2 = [int(x) for x in bbox]
+
+            # Add padding around the detection
+            pad = 10
+            x1 = max(0, x1 - pad)
+            y1 = max(0, y1 - pad)
+            x2 = min(image.width, x2 + pad)
+            y2 = min(image.height, y2 + pad)
+
+            # Crop the region
+            cropped = image.crop((x1, y1, x2, y2))
+
+            # Convert to numpy array for EasyOCR
+            cropped_np = np.array(cropped)
+
+            # Run OCR
+            reader = get_ocr_reader()
+            results = reader.readtext(cropped_np, detail=0)
+
+            # Filter for numbers/alphanumeric IDs
+            text_parts = []
+            for text in results:
+                # Keep alphanumeric parts that look like IDs
+                cleaned = ''.join(c for c in text if c.isalnum())
+                if cleaned and (any(c.isdigit() for c in cleaned)):
+                    text_parts.append(cleaned)
+
+            if text_parts:
+                return ' '.join(text_parts)
+            return None
+
+        except Exception as e:
+            logger.warning(f"OCR failed: {e}")
+            return None
     
     def _count_objects(self, detections: List[Dict]) -> Dict[str, int]:
         """Count objects by class"""

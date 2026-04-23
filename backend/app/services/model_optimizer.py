@@ -63,8 +63,10 @@ class ModelOptimizer:
         """Check if TensorRT is available"""
         try:
             import torch_tensorrt
-            # Verify TensorRT can actually be used
-            torch_tensorrt.runtime.get_cudnn_enabled()
+            # Verify the dynamo compile API we actually use exists.
+            if not hasattr(torch_tensorrt, "dynamo") or not hasattr(torch_tensorrt.dynamo, "compile"):
+                logger.warning("torch_tensorrt present but dynamo.compile missing")
+                return False
             logger.info("TensorRT available via torch_tensorrt")
             return True
         except ImportError:
@@ -184,14 +186,15 @@ class ModelOptimizer:
                     dims = [dynamic_batch] + [None] * (tensor.dim() - 1)
                     dynamic_shapes[key] = tuple(dims)
             
-            # Export model for TensorRT
+            # Export model for TensorRT. In newer torch.export the top-level
+            # keys of dynamic_shapes must match the arg names of inputs, not
+            # be wrapped under "kwargs".
             with torch.no_grad():
-                # Trace the model
                 exported = torch.export.export(
                     model,
                     (),  # No positional args
                     kwargs=inputs,
-                    dynamic_shapes={"kwargs": dynamic_shapes} if dynamic_shapes else None
+                    dynamic_shapes=dynamic_shapes if dynamic_shapes else None,
                 )
             
             # Compile with TensorRT
@@ -227,22 +230,32 @@ class ModelOptimizer:
         try:
             logger.info("Starting torch.compile optimization...")
             start_time = time.time()
-            
-            # Try inductor backend first (best performance)
+
+            # Inference runs on a background executor thread, but CUDA graphs
+            # require main-thread TLS. Disable cudagraphs globally so compiled
+            # kernels work across threads. We still keep max-autotune kernel
+            # selection for speed.
+            try:
+                import torch._inductor.config as inductor_config
+                inductor_config.triton.cudagraphs = False
+            except Exception as e:
+                logger.warning(f"Could not disable inductor cudagraphs: {e}")
+
             try:
                 compiled_model = torch.compile(
                     model,
                     backend="inductor",
-                    mode="max-autotune",  # Best performance, longer compile
-                    fullgraph=False,  # Allow graph breaks for complex models
+                    mode="max-autotune-no-cudagraphs",
+                    fullgraph=False,
                 )
                 backend = "torch_inductor"
-                logger.info("Using inductor backend with max-autotune")
+                logger.info("Using inductor backend with max-autotune-no-cudagraphs")
             except Exception as e:
-                logger.info(f"Inductor failed ({e}), trying reduce-overhead mode")
+                logger.info(f"Inductor max-autotune-no-cudagraphs failed ({e}), trying default mode")
                 compiled_model = torch.compile(
                     model,
-                    mode="reduce-overhead",
+                    backend="inductor",
+                    mode="default",
                     fullgraph=False,
                 )
                 backend = "torch_compile"

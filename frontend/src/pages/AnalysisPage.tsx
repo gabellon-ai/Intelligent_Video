@@ -4,7 +4,7 @@ import { VideoPlayer } from '../components/VideoPlayer'
 import { DetectionSummary } from '../components/DetectionSummary'
 import { ExportDropdown } from '../components/ExportDropdown'
 
-const WS_BASE = 'ws://localhost:8000/api/streams'
+const WS_BASE = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/streams`
 
 interface Detection {
   class: string
