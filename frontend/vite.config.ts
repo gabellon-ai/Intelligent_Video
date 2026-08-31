@@ -6,7 +6,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      // `ws: true` is required so the real-time detection WebSocket
+      // (/api/streams/ws/:jobId) is proxied to the backend in dev.
+      '/api': {
+        target: 'http://localhost:8000',
+        ws: true,
+      },
     },
   },
 })
